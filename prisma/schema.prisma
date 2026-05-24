@@ -1,0 +1,124 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  HOTEL_MANAGER
+  GUEST
+}
+
+enum HotelStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  COMPLETED
+}
+
+enum RoomType {
+  STANDARD_SINGLE @map("Standard Single")
+  STANDARD_DOUBLE @map("Standard Double")
+  DELUXE_KING     @map("Deluxe King")
+  JUNIOR_SUITE    @map("Junior Suite")
+  FAMILY_ROOM     @map("Family Room")
+}
+
+model User {
+  id                 String    @id @default(uuid())
+  email              String    @unique
+  passwordHash       String
+  role               Role
+  hotelId            String?   @unique
+  hotel              Hotel?    @relation(fields: [hotelId], references: [id])
+  mustChangePassword Boolean   @default(false)
+  refreshTokenHash   String?
+  refreshTokenId     String?
+  refreshTokenIssuedAt DateTime?
+  bookings           Booking[]
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@map("user")
+}
+
+model Hotel {
+  id        String      @id @default(uuid())
+  name      String
+  city      String
+  address   String
+  stars     Int
+  status    HotelStatus @default(ACTIVE)
+  timezone  String      @default("UTC")
+  rooms     Room[]
+  bookings  Booking[]
+  managers  User[]
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@index([city])
+  @@index([name])
+  @@map("hotel")
+}
+
+model Room {
+  id            String    @id @default(uuid())
+  hotelId       String
+  hotel         Hotel     @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  roomType      RoomType
+  capacity      Int
+  pricePerNight Decimal   @db.Decimal(10, 2)
+  isAvailable   Boolean   @default(true)
+  bookings      Booking[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([hotelId])
+  @@map("room")
+}
+
+model Booking {
+  id          String        @id @default(uuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id])
+  hotelId     String
+  hotel       Hotel         @relation(fields: [hotelId], references: [id])
+  roomId      String
+  room        Room          @relation(fields: [roomId], references: [id])
+  checkIn     DateTime      @db.Date
+  checkOut    DateTime      @db.Date
+  guestCount  Int
+  nights      Int
+  totalAmount Decimal       @db.Decimal(10, 2)
+  status      BookingStatus @default(PENDING)
+  payment     Payment?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([roomId, checkIn, checkOut, status])
+  @@map("booking")
+}
+
+model Payment {
+  id          String        @id @default(uuid())
+  bookingId   String        @unique
+  booking     Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  amount      Decimal       @db.Decimal(10, 2)
+  status      PaymentStatus @default(COMPLETED)
+  completedAt DateTime      @default(now())
+
+  @@map("payment")
+}
